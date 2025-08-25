@@ -7,8 +7,6 @@
 ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
 //////////////////////////////////////////
 
-
-
 float readChannel(ADS1115_MUX channel) {
   float voltage = 0.0;
   ads.setCompareChannels(channel);
