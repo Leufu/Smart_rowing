@@ -1,11 +1,13 @@
 #pragma once
-// Struct for sending the FSR data
+
+// Global definitions and common includes for the peripheral foot firmware.
 #define FSR_SAMPLE_RATE 100
 #include <cstddef>
 #include <cstdint>
-constexpr int PIN_IRQ = 4;
+constexpr int PIN_IRQ = 4;      // GPIO used for the timer interrupt
 
-typedef struct 
+// Structure carrying a timestamp and eight FSR sensor readings.
+typedef struct
 {
 	int64_t time_stamp;
 	uint16_t	  FSR_0;
@@ -18,6 +20,7 @@ typedef struct
 	uint16_t	  FSR_7;
 }FSR_data_t;
 
+// Message format used to synchronize the local timer.
 struct TickMsg{int64_t stamp_us;};
 /*
 typedef struct 

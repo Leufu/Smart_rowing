@@ -1,10 +1,11 @@
 //#include <esp32-hal-bt.c>
 
+// BLE configuration for the peripheral foot device.
 #include <NimBLEDevice.h>
 #define	size_of_struct 12000
 #define  chunk_size 128
 
-
+// Configuration for the BLE service used to transmit FSR data.
 const char* matrixUUID= "180F";
 //BLEService sensorService(matrixUUID);
 //BLEStringCharacteristic sensorCharacteristic(matrixUUID,BLERead | BLENotify,128);
@@ -19,9 +20,7 @@ static NimBLECharacteristic* pSensorCharacteristic = nullptr;
 
 
 
-// Se next function start the BLE service, createds the Server, service and characteristics for sending the data
-//
-//
+// Initializes the BLE stack, service and characteristic for data transmission.
 void Init_BLE()
 {	
 
