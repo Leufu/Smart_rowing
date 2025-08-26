@@ -5,6 +5,7 @@
 //#include "globals.h"
 //#include <imu_header.h>
 //
+// FreeRTOS task declarations and helpers for the peripheral foot firmware.
 /// VAR///
 //extern timer_0;
 
@@ -61,28 +62,29 @@ static volatile int64_t timer_0=0;
 // lock para proteger la variable del timer 
 static portMUX_TYPE t0mux= portMUX_INITIALIZER_UNLOCKED;
 
+// Return time elapsed in microseconds since `timer_0` was set.
 int64_t get_local_time_us()
 {
-	const int64_t now=esp_timer_get_time();
-	int64_t t0_copy;
+        const int64_t now=esp_timer_get_time();
+        int64_t t0_copy;
 
-	portENTER_CRITICAL(&t0mux);
-	t0_copy=timer_0;
-	portEXIT_CRITICAL(&t0mux);
-	
-	if(t0_copy==0){return -1;}// nos aseguramos que se hayan sincronizado
+        portENTER_CRITICAL(&t0mux);
+        t0_copy=timer_0;
+        portEXIT_CRITICAL(&t0mux);
 
-	return now-t0_copy;
+        if(t0_copy==0){return -1;}// nos aseguramos que se hayan sincronizado
+
+        return now-t0_copy;
 }
 
 
+// Interrupt routine that captures the current time and queues it.
 static void IRAM_ATTR update_timer_from_ISR()
 {
-	BaseType_t hpw = pdFALSE;
-	TickMsg m{esp_timer_get_time()};
-	xQueueSendFromISR(t0Queue,&m,&hpw);
-	if(hpw)portYIELD_FROM_ISR();
-
+        BaseType_t hpw = pdFALSE;
+        TickMsg m{esp_timer_get_time()};
+        xQueueSendFromISR(t0Queue,&m,&hpw);
+        if(hpw)portYIELD_FROM_ISR();
 }
 
 
@@ -91,8 +93,9 @@ static void IRAM_ATTR update_timer_from_ISR()
 
 ////////////////////////////////Init Task///////////////////////////////////
 
+// Create queues, attach interrupts and spawn all FreeRTOS tasks.
 void init_freertos_tasks()
-{
+{ 
   	pinMode(4, INPUT);// pin del interrupt
   	attachInterrupt(digitalPinToInterrupt(4), update_timer_from_ISR, RISING);
 			/////////////////////////////////fifo decla///////
@@ -112,9 +115,9 @@ void init_freertos_tasks()
 	xTaskCreate(TaskFSRRead,"TaskFSRRead",8096,NULL,10,&Task_FSRRead_Handle);
 	xTaskCreate(TaskBLE,"TaskBLE",8096,NULL,20,&Task_BLE_Handle);
 
-		//task monitor
-	xTaskCreatePinnedToCore(TaskMonitor, "TaskMonitor", 2548, NULL, 1, &Task_Monitor_Handle,1);
-	xTaskCreatePinnedToCore(TaskQueueMonitor, "QueueMonitor", 2548, NULL, 1, &Task_QueueMonitor_Handle,1);
+                //task monitor
+        xTaskCreatePinnedToCore(TaskMonitor, "TaskMonitor", 2548, NULL, 1, &Task_Monitor_Handle,1);
+        xTaskCreatePinnedToCore(TaskQueueMonitor, "QueueMonitor", 2548, NULL, 1, &Task_QueueMonitor_Handle,1);
 
 
 		//vTaskSuspendAll();
@@ -125,8 +128,9 @@ void init_freertos_tasks()
 
 
 //////////////////////////////Task declaration/////////////////////////////
+// Periodically print the current timer value for debugging.
 void TaskLocalTimerWatcher(void *pvParameters)
-{
+{ 
 	while (1)
 	{
 		Serial.print("timer_0= ");
@@ -135,8 +139,9 @@ void TaskLocalTimerWatcher(void *pvParameters)
 	}
 }
 
+// Updates timer_0 based on timestamps received from the ISR.
 static void TaskTimeKeeper(void  *pvParameters)
-{
+{ 
 	TickMsg m;
 	while(1)
 	{
@@ -154,21 +159,23 @@ static void TaskTimeKeeper(void  *pvParameters)
 
 
 
+// Simple task that blinks the built-in LED once per second.
 void TaskLEDTest(void *pvParameters)
 {
-	while (true) 
-	{
-		digitalWrite(LED_BUILTIN,1);
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		digitalWrite(LED_BUILTIN,0);
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}
+        while (true)
+        {
+                digitalWrite(LED_BUILTIN,1);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                digitalWrite(LED_BUILTIN,0);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+        }
 }
 
 
+// Read FSR sensors and push samples into the queue.
 void TaskFSRRead(void *pvParameters)
 {
-	FSR_data_t data;
+        FSR_data_t data;
 	//int64_t t_temp;
 	//int64_t get_local_time_us()
 
@@ -203,12 +210,13 @@ void TaskFSRRead(void *pvParameters)
 	}
 }
 ///////////////////// TaskBLE//////////////////////
+// Handles BLE connections and transmits queued FSR data.
 // Es recomendable que el stack ocupado por el BLE este inicializado antes de
 // su uso, por ende, ojala iniciarlo en el setup o antes del bucle principal
 // de la TASK
 
 void TaskBLE(void *pvParameters)
-{
+{ 
    FSR_data_t data;
 	char buffer[sizeof(FSR_data_t)+10];
 
@@ -251,30 +259,32 @@ void TaskBLE(void *pvParameters)
 
 //funtions/////////
 //
+// Debug print of first four FSR values.
 void printFSRData(FSR_data_t &data)
 {
-	Serial.printf("t: %d, F0: %d, F1: %d, F2: %d, F3: %d \n",data.time_stamp,data.FSR_0,data.FSR_1,data.FSR_2,data.FSR_3);
+        Serial.printf("t: %d, F0: %d, F1: %d, F2: %d, F3: %d \n",data.time_stamp,data.FSR_0,data.FSR_1,data.FSR_2,data.FSR_3);
 }
 
+// Print the entire FSR dataset as comma-separated values.
 void printFSRData_2(FSR_data_t &data)
 {
-	Serial.print(data.time_stamp);
-	Serial.print(",");
-	Serial.print(data.FSR_0);
-	Serial.print(",");
-	Serial.print(data.FSR_1);
-	Serial.print(",");
-	Serial.print(data.FSR_2);	
-	Serial.print(",");
-	Serial.print(data.FSR_3);
-	Serial.print(",");
-	Serial.print(data.FSR_4);	
-	Serial.print(",");
-	Serial.print(data.FSR_5);	
-	Serial.print(",");
-	Serial.print(data.FSR_6);	
-	Serial.print(",");
-	Serial.println(data.FSR_7);	
+        Serial.print(data.time_stamp);
+        Serial.print(",");
+        Serial.print(data.FSR_0);
+        Serial.print(",");
+        Serial.print(data.FSR_1);
+        Serial.print(",");
+        Serial.print(data.FSR_2);
+        Serial.print(",");
+        Serial.print(data.FSR_3);
+        Serial.print(",");
+        Serial.print(data.FSR_4);
+        Serial.print(",");
+        Serial.print(data.FSR_5);
+        Serial.print(",");
+        Serial.print(data.FSR_6);
+        Serial.print(",");
+        Serial.println(data.FSR_7);
 
 }
 
